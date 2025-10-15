@@ -2,15 +2,21 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include <unistd.h>
+
 extern char *tzname[];
 
 int main()
 {
     time_t now;
     struct tm *sp;
+    
+    setenv("TZ", "PST8", 1);
+    tzset();
 
     (void) time( &now );
 
+    printf("Время в Калифорнии (PST):\n");
     printf("%s", ctime( &now ) );
 
     sp = localtime(&now);
