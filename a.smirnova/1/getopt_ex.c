@@ -47,13 +47,16 @@ void print_ulimit(){
     printf("ulimit: %ld\n", sysconf(_SC_CHILD_MAX));
 }
 
-void change_ulimit(const char *value){
-    printf("\n");
-    if (ulimit(0, atol(value)) == -1){
-        perror("ulimit");
+void change_ulimit(const char *value) {
+    struct rlimit rl;
+    rl.rlim_cur = atol(value);
+    rl.rlim_max = rl.rlim_cur;
+
+    if (setrlimit(RLIMIT_NPROC, &rl) == -1) {
+        perror("setrlimit");
         return;
     }
-    printf("ulimit changed to %ld\n", ulimit(0));
+    printf("ulimit (RLIMIT_NPROC) changed to %ld\n", rl.rlim_cur);
 }
 
 void print_core_size(){
