@@ -6,6 +6,8 @@
 #include <limits.h>
 #include <string.h>
 #include <errno.h>
+#include <ulimit.h>
+
 
 char *strdup(const char *s) {
     size_t len = strlen(s) + 1;
@@ -42,76 +44,39 @@ void print_process_ids(){
 
 void print_ulimit(){
     printf("\n");
-    struct rlimit rlim;
-    if (getrlimit(RLIMIT_NOFILE, &rlim) == 0){
-        printf("ulimit (max open files): %ld\n", (long)rlim.rlim_cur);
-    } else {
-        perror("getrlimit");
-    }
+    printf("ulimit: %ld\n", sysconf(_SC_CHILD_MAX));
 }
 
 void change_ulimit(const char *value){
     printf("\n");
-    struct rlimit rlim;
-    long new_limit = atol(value);
-    
-    // Получаем текущие лимиты
-    if (getrlimit(RLIMIT_NOFILE, &rlim) == -1){
-        perror("getrlimit");
+    if (ulimit(0, atol(value)) == -1){
+        perror("ulimit");
         return;
     }
-    
-    // Устанавливаем новый лимит
-    rlim.rlim_cur = new_limit;
-    if (rlim.rlim_cur > rlim.rlim_max) {
-        rlim.rlim_cur = rlim.rlim_max;
-    }
-    
-    if (setrlimit(RLIMIT_NOFILE, &rlim) == -1){
-        perror("setrlimit");
-        return;
-    }
-    
-    // Получаем обновленное значение для проверки
-    if (getrlimit(RLIMIT_NOFILE, &rlim) == 0){
-        printf("ulimit changed to %ld\n", (long)rlim.rlim_cur);
-    } else {
-        perror("getrlimit");
-    }
+    printf("ulimit changed to %ld\n", ulimit(0));
 }
 
 void print_core_size(){
     printf("\n");
     struct rlimit rlim;
     if (getrlimit(RLIMIT_CORE, &rlim) == 0){
-        printf("core size: %ld bytes\n", (long)rlim.rlim_cur);
+        printf("core size: %ld bytes\n", rlim.rlim_cur);
     } else {
         perror("getrlimit");
     }
+    
 }
 
 void change_core_size(const char *value){
     printf("\n");
     struct rlimit rlim;
-    long new_size = atol(value);
-    
-    // Получаем текущие лимиты
-    if (getrlimit(RLIMIT_CORE, &rlim) == -1){
-        perror("getrlimit");
-        return;
-    }
-    
-    // Устанавливаем новый размер core файла
-    rlim.rlim_cur = new_size;
-    if (rlim.rlim_cur > rlim.rlim_max) {
-        rlim.rlim_max = rlim.rlim_cur;
-    }
-    
+    rlim.rlim_cur = atol(value);
+    rlim.rlim_max = rlim.rlim_cur;
     if (setrlimit(RLIMIT_CORE, &rlim) == -1){
         perror("setrlimit");
         return;
     }
-    printf("core size changed to %ld bytes\n", (long)rlim.rlim_cur);
+    printf("core size changed to %ld bytes\n", rlim.rlim_cur);
 }
 
 void print_current_directory(){
@@ -145,78 +110,77 @@ void set_environment_variable(const char *name, const char *value){
     printf("environment variable %s set to %s\n", name, value);
 }
 
-int parse_env_name(const char *input, char **name, char **value) {
+int parse_env_name(const char *input, char **name, char **value){
     char *equals = strchr(input, '=');
     if (equals == NULL) {
-        fprintf(stderr, "Invalid format for -V. Use: name=value\n");
+        perror("Invalid format for -V. Use: name=value\n");
         return -1;
     }
 
     size_t name_len = equals - input;
-    *name = strndup(input, name_len);
-    if (*name == NULL) {
-        perror("strndup");
+    *name = malloc(name_len + 1);
+    *value = strdup(equals + 1);
+
+    if (*name == NULL || *value == NULL){
+        perror("malloc/strdup");
+        free(*name);
+        *name = NULL;
+        free(*value);
+        *value = NULL;
         return -1;
     }
 
-    *value = strdup(equals + 1);
-    if (*value == NULL) {
-        perror("strdup");
-        free(*name);
-        *name = NULL;
-        return -1;
-    }
+    strncpy(*name, input, name_len);
+    (*name)[name_len] = '\0';
 
     return 0;
 }
 
+
 int main(int argc, char *argv[]) {
     int param;
-  while ((param = getopt(argc, argv, "ispuU:cC:dvV:")) != -1){
-          switch (param){
-              case 'i':
-                  print_ids();
-                  break;
-              case 's':
-                  become_group_leader();
-                  break;
-              case 'p':
-                  print_process_ids();
-                  break;
-              case 'u':
-                  print_ulimit();
-                  break;
-              case 'U':
-                  change_ulimit(optarg);
-                  break;
-              case 'c':
-                  print_core_size();
-                  break;
-              case 'C':
-                  change_core_size(optarg);
-                  break;
-              case 'd':
-                  print_current_directory();
-                  break;
-              case 'v':
-                  print_environment();
-                  break;
-              case 'V': {
-                  char *name = NULL;
-                  char *value = NULL;
-                  if (parse_env_name(optarg, &name, &value) == 0) {
-                      set_environment_variable(name, value);
-                      free(name);
-                      free(value);
-                  } else {
-                    if (name) free(name);
-                    if (value) free(value);
-                  }
-                  break;
-              }
-              default:
-                  exit(EXIT_FAILURE);
-          }
-      }    
-      return EXIT_SUCCESS; 
-  }
+
+    while ((param = getopt(argc, argv, "ispuU:cC:dvV:")) != -1){
+        switch (param){
+            case 'i':
+                print_ids();
+                break;
+            case 's':
+                become_group_leader();
+                break;
+            case 'p':
+                print_process_ids();
+                break;
+            case 'u':
+                print_ulimit();
+                break;
+            case 'U':
+                change_ulimit(optarg);
+                break;
+            case 'c':
+                print_core_size();
+                break;
+            case 'C':
+                change_core_size(optarg);
+                break;
+            case 'd':
+                print_current_directory();
+                break;
+            case 'v':
+                print_environment();
+                break;
+            case 'V': {
+                char *name, *value;
+                if (parse_env_name(optarg, &name, &value) == 0) {
+                    set_environment_variable(name, value);
+                    free(name);
+                    free(value);
+                }
+                break;
+            }
+            default:
+                exit(EXIT_FAILURE);
+        }
+    }    
+    return EXIT_SUCCESS; 
+}
