@@ -2,4 +2,4 @@
 !*/
 !*.c
 !*.txt
-!*.vscode
+.vscode/
