@@ -45,13 +45,9 @@ int main(int argc, char*argv[]) {
         int status;
         waitpid(pid, &status, 0);
         if (WIFEXITED(status)) {
-            // процесс завершился нормально
-            int exit_code = WEXITSTATUS(status);
-            printf("Родительский процесс: дочерний процесс завершился с кодом = %d\n", exit_code);
+            printf("Родительский процесс: дочерний процесс завершился нормально\n");
         } else if (WIFSIGNALED(status)) {
-            // процесс был завершен сигналом
-            int signal_num = WTERMSIG(status);
-            printf("Родительский процесс: дочерний процесс убит сигналом = %d\n", signal_num);
+            printf("Родительский процесс: дочерний процесс завершился с ошибкой\n");
         } else {
             printf("Родительский процесс: дочерний процесс завершился ненормально\n");
         }
