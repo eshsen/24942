@@ -21,7 +21,15 @@ char gettype(mode_t mode) {
 
 void format_date_ls(time_t mtime, char* buffer, size_t size) {
     struct tm* tm_info = localtime(&mtime);
-    strftime(buffer, size, "%b %d %H:%M", tm_info);
+    time_t now = time(NULL);
+    struct tm* now_info = localtime(&now);
+    
+    if (now_info->tm_year - tm_info->tm_year > 0 || 
+        (now_info->tm_year == tm_info->tm_year && now_info->tm_mon - tm_info->tm_mon > 6)) {
+        strftime(buffer, size, "%b %_d  %Y", tm_info);  // %_d для убирания ведущего нуля
+    } else {
+        strftime(buffer, size, "%b %_d %H:%M", tm_info);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -51,19 +59,15 @@ int main(int argc, char *argv[]) {
                          sb.st_mode & S_IWOTH ? 'w' : '-',
                          sb.st_mode & S_IXOTH ? 'x' : '-');
         
-        printf(" %3ld", (long)sb.st_nlink);
+        printf(" %ld", (long)sb.st_nlink);
         
         struct passwd* pwd = getpwuid(sb.st_uid);
         struct group* grp = getgrgid(sb.st_gid);
-        printf(" %-8s %-8s", 
+        printf(" %s %s", 
                pwd ? pwd->pw_name : "?", 
                grp ? grp->gr_name : "?");
         
-        if (S_ISREG(sb.st_mode)) {
-            printf(" %8ld", (long)sb.st_size);
-        } else {
-            printf(" %8s", "");
-        }
+        printf(" %ld", (long)sb.st_size);
         
         char date_buf[32];
         format_date_ls(sb.st_mtime, date_buf, sizeof(date_buf));
