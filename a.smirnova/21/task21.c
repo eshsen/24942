@@ -8,7 +8,7 @@ volatile sig_atomic_t count = 0;
 void handle_sigint(int sig) { 
     count++; 
     write(1, "\a", 1); 
-    // Повторно устанавливаем обработчик
+
     signal(SIGINT, handle_sigint);
 }
 
