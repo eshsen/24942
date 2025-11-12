@@ -2,43 +2,47 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <unistd.h>
-#include <string.h>
 
-volatile sig_atomic_t signal_count = 0;
+volatile sig_atomic_t beep_count = 0;
 volatile sig_atomic_t keep_running = 1;
 
+// Обработчик для SIGINT (Ctrl+C)
 void sigint_handler(int sig) {
-    signal_count++;
-    write(STDOUT_FILENO, "\a", 1);
+    write(STDOUT_FILENO, "\a", 1); 
+    beep_count++;
+    printf("\nBeep! (Ctrl+C pressed)\n");
 }
 
+// Обработчик для SIGQUIT (Ctrl+\)
 void sigquit_handler(int sig) {
-    char buffer[100];
-    int len = snprintf(buffer, sizeof(buffer), 
-                      "\nПрограмма завершена. Сигнал SIGINT получен %d раз(а).\n", 
-                      signal_count);
-    write(STDOUT_FILENO, buffer, len);
-    keep_running = 0;
+    printf("\nTotal beep count: %d\n", beep_count);
+    printf("Program terminated by Ctrl+\\n");
+    exit(0);
 }
 
 int main() {
-    if (signal(SIGINT, sigint_handler) == SIG_ERR) {
-        perror("signal SIGINT");
-        exit(1);
-    }
+    signal(SIGINT, sigint_handler);
+    signal(SIGQUIT, sigquit_handler);
     
-    if (signal(SIGQUIT, sigquit_handler) == SIG_ERR) {
-        perror("signal SIGQUIT");
-        exit(1);
-    }
+    printf("Program started. PID: %d\n", getpid());
+    printf("Type text and press Enter to beep.\n");
+    printf("Press Ctrl+C for instant beep.\n");
+    printf("Press Ctrl+\ to show statistics and exit.\n");
     
-    printf("Программа запущена. PID: %d\n", getpid());
-    printf("Используйте Ctrl-C для звукового сигнала\n");
-    printf("Используйте Ctrl-\\ для вывода статистики и завершения\n");
-    printf("Ожидание сигналов...\n");
-    
-    while (keep_running) {
-        pause();
+    while(1) {
+        int c = getchar();
+        
+        if (c == EOF) {
+            printf("\nBeep count: %d\n", beep_count);
+            exit(0);
+        }
+        
+        if (c == '\n') {
+            write(STDOUT_FILENO, "\a", 1); 
+            beep_count++;
+            printf("Beep! (line completed)\n");
+        }
+        
     }
     
     return 0;
