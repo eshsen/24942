@@ -1,57 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <signal.h>
 #include <unistd.h>
+#include <signal.h>
 
-volatile sig_atomic_t beep_count = 0;
-volatile sig_atomic_t need_exit = 0;
+volatile sig_atomic_t count = 0;
 
-// Обработчик для SIGINT (Ctrl+C)
-void sigint_handler(int sig) {
-    write(STDOUT_FILENO, "\a", 1); 
-    beep_count++;
-    printf("\nBeep! (Ctrl+C pressed)\n");
-    printf("> ");
-    fflush(stdout);
+void handle_sigint(int sig) { 
+    count++; 
+    write(1, "\a", 1); 
+    // Повторно устанавливаем обработчик
+    signal(SIGINT, handle_sigint);
 }
 
-// Обработчик для SIGQUIT (Ctrl+\)
-void sigquit_handler(int sig) {
-    printf("\nTotal beep count: %d\n", beep_count);
-    printf("Program terminated by Ctrl+\\\n");
-    need_exit = 1;
+void handle_sigquit(int sig) { 
+    printf("\n%d\n", count); 
+    exit(0); 
 }
 
 int main() {
-    // Устанавливаем обработчики сигналов
-    signal(SIGINT, sigint_handler);
-    signal(SIGQUIT, sigquit_handler);
+    signal(SIGINT, handle_sigint);
+    signal(SIGQUIT, handle_sigquit);
     
-    printf("Program started. PID: %d\n", getpid());
-    printf("Type text and press Enter to beep.\n");
-    printf("Press Ctrl+C for instant beep.\n");
-    printf("Press Ctrl+\\ to show statistics and exit.\n");
-    printf("> ");
+    printf("Программа запущена. Ctrl-C для звука, Ctrl-\\ для выхода\n");
     
-    while(!need_exit) {
-        int c = getchar();
-        
-        if (need_exit) {
-            break;
-        }
-        
-        if (c == EOF) {
-            // Если getchar был прерван сигналом, продолжаем
-            clearerr(stdin);
-            continue;
-        }
-        
-        if (c == '\n') {
-            write(STDOUT_FILENO, "\a", 1); 
-            beep_count++;
-            printf("Beep! (line completed)\n");
-            printf("> ");
-        }
+    while (1) {
+        pause();
     }
     
     return 0;
