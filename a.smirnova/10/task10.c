@@ -18,10 +18,11 @@ int main(int argc, char* argv[]) {
     // Определяем команду и аргументы
     if (argc == 2) {
         command = "cat";
-        args_count = 2;
+        args_count = 3;
         cmd_args = malloc(args_count * sizeof(char*));
         cmd_args[0] = "cat";
         cmd_args[1] = argv[1];
+        cmd_args[2] = NULL;
     } else {
         command = argv[1];
         args_count = argc;
