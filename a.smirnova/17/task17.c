@@ -107,6 +107,16 @@ int main(void) {
             case CTRL_W: // Удалить слово
                 erase_word(&e);
                 break;
+
+            case '\n':
+                if (e.len < MAX_TEXT_LENGTH - 1) {
+                    if (e.pos < e.len) {
+                        memmove(e.text + e.pos + 1, e.text + e.pos, e.len - e.pos);
+                    }
+                    e.text[e.pos++] = '\n';
+                    e.text[++e.len] = '\0';
+                }
+                break;
                 
             default:
                 if (c >= 32 && c <= 126) { // Печатаемые символы
