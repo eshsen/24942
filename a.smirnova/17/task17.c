@@ -36,161 +36,41 @@ struct editor {
 };
 
 void redraw(struct editor *e) {
-    // Сохраняем позицию курсора, перемещаемся в начало и очищаем строку
-    printf("\033[s\033[1;1H\033[2KInput text (CTRL-D at line start to exit):");
-    // Переходим на вторую строку и очищаем экран от курсора до конца
-    printf("\033[2;1H\033[J");
+    printf("\033[2J\033[HInput text (CTRL-D at line start to exit):\n");
     
-
-    if (e->len > 0) {
-        int col = 0; 
-        int i = 0;
-        
-        while (i < e->len) {
-
-            if (e->text[i] == ' ' || e->text[i] == '\t') {
-                if (col >= MAX_LINE_LENGTH) {
-                    printf("\n");
-                    col = 0;
-                }
-                putchar(e->text[i]);
-                col++;
-                i++;
-            } 
-            else {
-
-                int word_start = i;
-                int word_end = i;
-                while (word_end < e->len && e->text[word_end] != ' ' && e->text[word_end] != '\t') {
-                    word_end++;
-                }
-                
-                int word_length = word_end - word_start;
-                
-                if (word_length > MAX_LINE_LENGTH) {
-
-                    int chars_to_print = MAX_LINE_LENGTH - col;
-                    if (chars_to_print <= 0) {
-                        printf("\n");
-                        col = 0;
-                        chars_to_print = MAX_LINE_LENGTH;
-                    }
-                    
-                    for (int j = 0; j < chars_to_print && i < e->len && e->text[i] != ' ' && e->text[i] != '\t'; j++) {
-                        putchar(e->text[i]);
-                        i++;
-                        col++;
-                    }
-                    
-                    if (col >= MAX_LINE_LENGTH) {
-                        printf("\n");
-                        col = 0;
-                    }
-                }
-
-                else if (col + word_length > MAX_LINE_LENGTH) {
-                    printf("\n");
-                    col = 0;
-                    
-
-                    for (int j = word_start; j < word_end; j++) {
-                        putchar(e->text[j]);
-                    }
-                    col += word_length;
-                    i = word_end;
-                }
-
-                else {
-
-                    for (int j = word_start; j < word_end; j++) {
-                        putchar(e->text[j]);
-                    }
-                    col += word_length;
-                    i = word_end;
-                }
-            }
-        }
-    }
-    
- 
-    int line = 2; 
     int col = 0;
-    int i = 0;
-    
-
-    while (i < e->pos) {
-        if (e->text[i] == ' ' || e->text[i] == '\t') {
-            if (col >= MAX_LINE_LENGTH) {
-                line++;
-                col = 0;
-            }
-            col++;
-            i++;
-        } 
-        else {
-
-            int word_start = i;
-            int word_end = i;
-            while (word_end < e->pos && e->text[word_end] != ' ' && e->text[word_end] != '\t') {
-                word_end++;
-            }
-            
-            int word_length = word_end - word_start;
-            
-
-            if (word_length > MAX_LINE_LENGTH) {
-                int remaining_in_line = MAX_LINE_LENGTH - col;
-                if (remaining_in_line <= 0) {
-                    line++;
-                    col = 0;
-                    remaining_in_line = MAX_LINE_LENGTH;
-                }
-                
-                int chars_to_process = (e->pos - i < remaining_in_line) ? e->pos - i : remaining_in_line;
-                col += chars_to_process;
-                i += chars_to_process;
-                
-                if (col >= MAX_LINE_LENGTH) {
-                    line++;
-                    col = 0;
-                }
-            }
-
-            else if (col + word_length > MAX_LINE_LENGTH) {
-                line++;
-                col = word_length;
-                i = word_end;
-            }
-            else {
-                col += word_length;
-                i = word_end;
-            }
+    for (int i = 0; i < e->len; i++) {
+        if (col >= MAX_LINE_LENGTH) {
+            printf("\n");
+            col = 0;
+        }
+        
+        putchar(e->text[i]);
+        col++;
+        
+        if (e->text[i] == ' ' && col >= MAX_LINE_LENGTH - 10 && i + 1 < e->len && e->text[i + 1] != ' ') {
+            printf("\n");
+            col = 0;
         }
     }
-
-    printf("\033[%d;%dH", line, col + 1);
+    
+    printf("\033[2;1H");
     fflush(stdout);
 }
-    
 
 void erase_word(struct editor *e) {
     if (e->pos == 0) {
         putchar(BELL);
-        fflush(stdout);
         return;
     }
     
-    int end = e->pos;
-    while (end > 0 && (e->text[end - 1] == ' ' || e->text[end - 1] == '\t')) end--;
-    while (end > 0 && e->text[end - 1] != ' ' && e->text[end - 1] != '\t') end--;
+    int new_pos = e->pos;
+    while (new_pos > 0 && e->text[new_pos - 1] == ' ') new_pos--;
+    while (new_pos > 0 && e->text[new_pos - 1] != ' ') new_pos--;
     
-    int n = e->pos - end;
-    if (n > 0) {
-        memmove(e->text + end, e->text + e->pos, e->len - e->pos + 1);
-        e->len -= n;
-        e->pos = end;
-        redraw(e);
-    }
+    memmove(e->text + new_pos, e->text + e->pos, e->len - e->pos + 1);
+    e->len -= (e->pos - new_pos);
+    e->pos = new_pos;
 }
 
 int main(void) {
@@ -198,7 +78,7 @@ int main(void) {
     char c;
     
     setup_terminal();
-    printf("\033[2J\033[HInput text (CTRL-D at line start to exit):\n");
+    printf("\033[2J\033[HInput text (CTRL-D at line start to exit):\n> ");
     fflush(stdout);
     
     while (read(STDIN_FILENO, &c, 1) == 1) {
@@ -207,56 +87,43 @@ int main(void) {
             break;
         }
         
-        if (c == ERASE) {
-            if (e.pos > 0) {
-                e.pos--;
-                e.len--;
-                memmove(e.text + e.pos, e.text + e.pos + 1, e.len - e.pos + 1);
-                redraw(&e);
-            } else {
-                putchar(BELL);
-                fflush(stdout);
-            }
-            continue;
-        }
-        
-        if (c == KILL) {
-            if (e.pos > 0) {
+        switch (c) {
+            case ERASE: // Backspace
+                if (e.pos > 0) {
+                    memmove(e.text + e.pos - 1, e.text + e.pos, e.len - e.pos + 1);
+                    e.pos--;
+                    e.len--;
+                } else {
+                    putchar(BELL);
+                }
+                break;
+                
+            case KILL: // Ctrl+U
                 memmove(e.text, e.text + e.pos, e.len - e.pos + 1);
                 e.len -= e.pos;
                 e.pos = 0;
-                redraw(&e);
-            } else {
-                putchar(BELL);
-                fflush(stdout);
-            }
-            continue;
+                break;
+                
+            case CTRL_W: // Удалить слово
+                erase_word(&e);
+                break;
+                
+            default:
+                if (c >= 32 && c <= 126) { // Печатаемые символы
+                    if (e.len < MAX_TEXT_LENGTH - 1) {
+                        if (e.pos < e.len) {
+                            memmove(e.text + e.pos + 1, e.text + e.pos, e.len - e.pos);
+                        }
+                        e.text[e.pos++] = c;
+                        e.text[++e.len] = '\0';
+                    } else {
+                        putchar(BELL);
+                    }
+                } else {
+                    putchar(BELL);
+                }
         }
         
-        if (c == CTRL_W) {
-            erase_word(&e);
-            continue;
-        }
-        
-        if (c < 32 || c > 126) {
-            putchar(BELL);
-            fflush(stdout);
-            continue;
-        }
-        
-        if (e.len >= MAX_TEXT_LENGTH - 1) {
-            putchar(BELL);
-            fflush(stdout);
-            continue;
-        }
-        
-        if (e.pos < e.len) {
-            memmove(e.text + e.pos + 1, e.text + e.pos, e.len - e.pos);
-        }
-        e.text[e.pos] = c;
-        e.pos++;
-        e.len++;
-        e.text[e.len] = '\0';
         redraw(&e);
     }
     
