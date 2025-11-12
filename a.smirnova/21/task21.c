@@ -27,7 +27,7 @@ int main() {
     printf("Program started. PID: %d\n", getpid());
     printf("Type text and press Enter to beep.\n");
     printf("Press Ctrl+C for instant beep.\n");
-    printf("Press Ctrl+\ to show statistics and exit.\n");
+    printf("Press Ctrl+\\ to show statistics and exit.\n");
     
     while(1) {
         int c = getchar();
