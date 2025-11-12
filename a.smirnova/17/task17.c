@@ -109,7 +109,7 @@ int main(void) {
                 break;
                 
             default:
-                if (c >= 32 && c <= 126) { // Печатаемые символы
+                if (c >= 32 && c <= 126) {
                     if (e.len < MAX_TEXT_LENGTH - 1) {
                         if (e.pos < e.len) {
                             memmove(e.text + e.pos + 1, e.text + e.pos, e.len - e.pos);
