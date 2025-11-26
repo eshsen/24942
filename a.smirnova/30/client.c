@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 
-#define SOCKET_PATH "/tmp/task30_socket"
+#define SOCKET_PATH "/tmp/30_socket"
 #define BUFFER_SIZE 1024
 
 int main() {
