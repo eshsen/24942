@@ -12,7 +12,7 @@ int main(){
 
     int client_fd;
     struct sockaddr_un socket_addr;
-    char buffer[BUF] = "abaababababababababababababa";
+    char buffer[BUF] = "ababababab";
     ssize_t bytes = strlen(buffer);
     buffer[bytes] = '\0';
 
