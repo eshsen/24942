@@ -12,7 +12,7 @@ int main(){
 
     int client_fd;
     struct sockaddr_un socket_addr;
-    char buffer[BUF] = "ababababab";
+    char buffer[BUF] = "abaababababababababababababa";
     ssize_t bytes = strlen(buffer);
     buffer[bytes] = '\0';
 
@@ -28,7 +28,7 @@ int main(){
 
     sleep(2);
 
-    while(count < 80){
+    while(count < 60){
         write(client_fd, buffer, bytes);
         count++;
         usleep(100000);
