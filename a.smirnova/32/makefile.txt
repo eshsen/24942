@@ -1,16 +1,13 @@
-CC = gcc
-CFLAGS = 
-TARGETS = server client
+all:
+	gcc -o server server.c -lsocket -lnsl
+	gcc -o cl1 client.c -lsocket -lnsl
+	gcc -o cl2 client2.c -lsocket -lnsl
 
-all: $(TARGETS)
+run_server:
+	./server
 
-server: server.c
-	$(CC) $(CFLAGS) -o server server.c
+run_client:
+	./cl1
 
-client: client.c
-	$(CC) $(CFLAGS) -o client client.c
-
-clean:
-	rm -f $(TARGETS) *.o
-
-.PHONY: all clean
+run_client2:
+	./cl2

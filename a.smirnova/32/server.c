@@ -1,107 +1,167 @@
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
-#include <ctype.h>
-#include <fcntl.h>
-#include <aio.h>
-#include <pthread.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <ctype.h>
+#include <poll.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <time.h>
 
-#define SOCKET_PATH "/tmp/task32_socket"
-#define MAX_CLIENTS 20000
-#define BUFFER_SIZE 4096
-#define TARGET_CLIENTS 10000
+#define SOCKET_PATH  "./socket"
+#define BUF 1024
+#define MAX_CLIENTS 5
 
-struct client {
-    int fd;
-    struct aiocb cb;
-    char buffer[BUFFER_SIZE];
-} clients[MAX_CLIENTS];
-
-int server_fd;
-volatile int total_connected = 1;
-volatile int total_finished = 0;
-
-_Atomic int active_clients = 0;
-
-void aio_completion_handler(union sigval sv) {
-    struct aiocb *cb = sv.sival_ptr;
-    struct client *c = NULL;
-
-    for (int i = 0; i < MAX_CLIENTS; i++) {
-        if (&clients[i].cb == cb) {
-            c = &clients[i];
-            break;
-        }
+void set_nonblocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1) {
+        perror("fcntl F_GETFL");
+        return;
     }
-    if (!c || c->fd == -1) return;
-
-    ssize_t n = aio_return(cb);
-    if (n > 0) {
-        for (ssize_t j = 0; j < n; j++)
-            c->buffer[j] = toupper((unsigned char)c->buffer[j]);
-        write(STDOUT_FILENO, c->buffer, n);
-        aio_read(cb);
-    } else {
-        close(c->fd);
-        c->fd = -1;
-        total_finished++;
-        active_clients--;
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("fcntl F_SETFL");
     }
 }
 
+void get_current_time(char *time_buf, size_t buf_size) {
+    time_t now = time(NULL);
+    struct tm *tm_info = localtime(&now);
+    strftime(time_buf, buf_size, "%Y-%m-%d %H:%M:%S", tm_info);
+}
+
 int main() {
-    unlink(SOCKET_PATH);
+    int server_fd, client_fd;
+    struct sockaddr_un socket_addr;
+    char buffer[BUF];
+    ssize_t bytes;
+
+    struct pollfd fds[MAX_CLIENTS + 1];
+    int client_count = 1;
+    
+    char mixed_buffer[BUF * 10] = {0};
+    int mixed_pos = 0;
+    
+    char connection_time[MAX_CLIENTS + 1][64];
+
     server_fd = socket(AF_UNIX, SOCK_STREAM, 0);
-    fcntl(server_fd, F_SETFL, O_NONBLOCK);
-    struct sockaddr_un addr = { .sun_family = AF_UNIX };
-    strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);
+    set_nonblocking(server_fd);
 
-    bind(server_fd, (struct sockaddr*)&addr, sizeof(addr));
-    listen(server_fd, 512);
+    memset(&socket_addr, 0, sizeof(socket_addr));
+    socket_addr.sun_family = AF_UNIX;
+    strncpy(socket_addr.sun_path, SOCKET_PATH, sizeof(socket_addr.sun_path)-1);
 
-    for (int i = 0; i < MAX_CLIENTS; i++) clients[i].fd = -1;
+    unlink(SOCKET_PATH);
 
-    printf("AIO-сервер запущен\n");
+    bind(server_fd, (struct sockaddr*)&socket_addr, sizeof(socket_addr));
+    listen(server_fd, MAX_CLIENTS);
 
-    while (total_finished < TARGET_CLIENTS) {
-        int fd;
-        while ((fd = accept(server_fd, NULL, NULL)) != -1) {
-            if (total_connected >= MAX_CLIENTS) { close(fd); break; }
+    memset(fds, 0, sizeof(fds));
+    memset(connection_time, 0, sizeof(connection_time));
+    
+    fds[0].fd = server_fd;
+    fds[0].events = POLLIN;
 
-            for (int i = 0; i < MAX_CLIENTS; i++) {
-                if (clients[i].fd == -1) {
-                    clients[i].fd = fd;
-                    total_connected++;
-                    active_clients++;
+    printf("Сервер запущен...\n");
 
-                    memset(&clients[i].cb, 0, sizeof(struct aiocb));
-                    clients[i].cb.aio_fildes = fd;
-                    clients[i].cb.aio_buf = clients[i].buffer;
-                    clients[i].cb.aio_nbytes = BUFFER_SIZE;
-                    clients[i].cb.aio_sigevent.sigev_notify = SIGEV_THREAD;
-                    clients[i].cb.aio_sigevent.sigev_notify_function = aio_completion_handler;
-                    clients[i].cb.aio_sigevent.sigev_value.sival_ptr = &clients[i].cb;
+    while (1) {
+        int ready = poll(fds, client_count, 100);
 
-                    aio_read(&clients[i].cb);
-                    break;
+        for (int i = 0; i < client_count; i++) {
+            if (fds[i].revents == 0) continue;
+
+            if (fds[i].fd == server_fd) {
+                if (fds[i].revents & POLLIN) {
+                    while (1) {
+                        client_fd = accept(server_fd, NULL, NULL);
+                        if (client_fd == -1) {
+                            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                                break;
+                            }
+                        }
+                        
+                        if (client_count < MAX_CLIENTS + 1) {
+                            set_nonblocking(client_fd);
+                            fds[client_count].fd = client_fd;
+                            fds[client_count].events = POLLIN;
+                            
+                            get_current_time(connection_time[client_count], sizeof(connection_time[client_count]));
+                            char current_time[64];
+                            get_current_time(current_time, sizeof(current_time));
+                            printf("[%s] Новое подключение клиента %d\n", current_time, client_count);
+                            
+                            client_count++;
+                        } else {
+                            close(client_fd);
+                        }
+                    }
+                }
+            } 
+            else if (fds[i].revents & POLLIN) {
+                bytes = read(fds[i].fd, buffer, 1);
+                
+                if (bytes > 0) {
+                    buffer[bytes] = '\0';
+                    
+                    if (mixed_pos < sizeof(mixed_buffer) - 1) {
+                        mixed_buffer[mixed_pos++] = buffer[0];
+                        mixed_buffer[mixed_pos] = '\0';
+                    }
+                    
+                    if (mixed_pos >= 30) {
+                        printf("Клиент %d: %s\n",fds[i].fd ,mixed_buffer);
+                        mixed_pos = 0;
+                    }
+                } 
+                else if (bytes == -1) {
+                    if (!(errno == EAGAIN || errno == EWOULDBLOCK)) {
+                        close(fds[i].fd);
+                        fds[i].fd = -1;
+                    }
+                }
+                else if (bytes == 0) {
+                    char current_time[64];
+                    get_current_time(current_time, sizeof(current_time));
+                    
+                    time_t now = time(NULL);
+                    struct tm tm_connect;
+                    memset(&tm_connect, 0, sizeof(tm_connect));
+                    sscanf(connection_time[i], "%d-%d-%d %d:%d:%d", 
+                           &tm_connect.tm_year, &tm_connect.tm_mon, &tm_connect.tm_mday,
+                           &tm_connect.tm_hour, &tm_connect.tm_min, &tm_connect.tm_sec);
+                    tm_connect.tm_year -= 1900;
+                    tm_connect.tm_mon -= 1;
+                    time_t connect_time = mktime(&tm_connect);
+                    
+                    int duration = (int)difftime(now, connect_time);
+                    
+                    printf("[%s] Клиент %d отключился, время подключения: %d секунд\n", current_time, fds[i].fd, duration);
+                    close(fds[i].fd);
+                    fds[i].fd = -1;
+                    memset(connection_time[i], 0, sizeof(connection_time[i]));
                 }
             }
         }
 
-        if (total_connected >= TARGET_CLIENTS && total_connected % 1000 == 999) {
-            printf("[AIO] Подключено: %d | Активно: %d | Завершено: %d\n",
-                   total_connected, (int)active_clients, total_finished);
+        for (int i = 0; i < client_count; i++) {
+            if (fds[i].fd == -1) {
+                for (int j = i; j < client_count - 1; j++) {
+                    fds[j] = fds[j + 1];
+                    strncpy(connection_time[j], connection_time[j + 1], sizeof(connection_time[j]));
+                }
+                i--;
+                client_count--;
+            }
         }
-
-        usleep(10000);
     }
 
-    printf("AIO-сервер завершается\n");
-    close(server_fd);
+    for (int i = 0; i < client_count; i++) {
+        if (fds[i].fd != -1) {
+            close(fds[i].fd);
+        }
+    }
+
     unlink(SOCKET_PATH);
     return 0;
 }
